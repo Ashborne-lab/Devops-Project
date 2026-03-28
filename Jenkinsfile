@@ -4,16 +4,22 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                // This tells Jenkins to securely download your code from GitHub
                 checkout scm
             }
         }
         
-        stage('Verify Files') {
+        stage('Automated Tests') {
             steps {
-                echo 'Successfully pulled code from GitHub!'
-                // This lists the files to prove they are there
-                sh 'ls -la' 
+                echo 'Setting up Python environment and running tests...'
+                sh '''
+                # Create a virtual environment and activate it
+                python3 -m venv venv
+                . venv/bin/activate
+                
+                # Install Flask and run our test script
+                pip install flask
+                python3 test_app.py
+                '''
             }
         }
     }
