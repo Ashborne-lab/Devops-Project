@@ -1,0 +1,5 @@
+FROM jenkins/jenkins:lts
+USER jenkins
+
+# This command forces Docker to download the plugins during the build phase, bypassing the Jenkins UI entirely.
+RUN jenkins-plugin-cli --plugins "git workflow-aggregator docker-workflow"
