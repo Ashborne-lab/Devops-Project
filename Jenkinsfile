@@ -10,16 +10,30 @@ pipeline {
         
         stage('Automated Tests') {
             steps {
-                echo 'Setting up Python environment and running tests...'
+                echo 'Running Python Integration Tests...'
                 sh '''
-                # Create a virtual environment and activate it
                 python3 -m venv venv
                 . venv/bin/activate
-                
-                # Install Flask and run our test script
                 pip install flask
                 python3 test_app.py
                 '''
+            }
+        }
+        
+        stage('Build Production Image') {
+            steps {
+                echo 'Tests passed! Building the Docker image...'
+                sh 'docker build -t devops-python-app:latest .'
+            }
+        }
+        
+        stage('Deploy to Production') {
+            steps {
+                echo 'Deploying the live website...'
+                // If an old version is running, delete it first
+                sh 'docker rm -f live-python-app || true'
+                // Launch the new updated website
+                sh 'docker run -d -p 5000:5000 --name live-python-app devops-python-app:latest'
             }
         }
     }
