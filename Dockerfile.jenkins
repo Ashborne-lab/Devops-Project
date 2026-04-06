@@ -2,8 +2,7 @@ FROM jenkins/jenkins:lts
 
 USER root
 
-# Install Python AND the Docker CLI
+
 RUN apt-get update && apt-get install -y python3 python3-pip python3-venv docker.io
 
-# Switch back to the safe user. The plugins will load from your saved volume!
 USER jenkins
