@@ -20,10 +20,13 @@ pipeline {
             }
         }
         
-        stage('Build Production Image') {
+       stage('Build Production Images') {
             steps {
-                echo 'Tests passed! Building the Docker image...'
-                sh 'docker build -t devops-python-app:latest .'
+                echo 'Tests passed! Building the Docker images...'
+                // Build the Python App
+                sh 'docker build -t devops-python-app:latest -f Dockerfile .'
+                // Build the custom Nginx Proxy
+                sh 'docker build -t devops-nginx:latest -f Dockerfile.nginx .'
             }
         }
         
@@ -39,11 +42,11 @@ pipeline {
                 docker rm -f live-python-app || true
                 docker rm -f live-nginx || true
                 
-                # 3. Launch the Python App (Hidden from the outside world)
+                # 3. Launch the Python App (Hidden on the private network)
                 docker run -d --network devops-net --name live-python-app devops-python-app:latest
                 
-                # 4. Launch Nginx (Public facing on port 80)
-                docker run -d -p 80:80 --network devops-net --name live-nginx -v $(pwd)/nginx.conf:/etc/nginx/conf.d/default.conf nginx:alpine
+                # 4. Launch Nginx (Public facing on port 80, using our new custom baked image)
+                docker run -d -p 80:80 --network devops-net --name live-nginx devops-nginx:latest
                 '''
             }
         }
