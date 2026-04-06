@@ -20,10 +20,24 @@ pipeline {
             }
         }
         
-        stage('Build Production Image') {
+        stage('Deploy to Production') {
             steps {
-                echo 'Tests passed! Building the Docker image...'
-                sh 'docker build -t devops-python-app:latest .'
+                echo 'Deploying the multi-container architecture...'
+                
+                sh '''
+                # 1. Create a private network for the containers to talk to each other
+                docker network create devops-net || true
+                
+                # 2. Delete any old containers
+                docker rm -f live-python-app || true
+                docker rm -f live-nginx || true
+                
+                # 3. Launch the Python App (Hidden from the outside world, no -p flag!)
+                docker run -d --network devops-net --name live-python-app devops-python-app:latest
+                
+                # 4. Launch Nginx (Public facing on port 80, mounted with our config file)
+                docker run -d -p 80:80 --network devops-net --name live-nginx -v $(pwd)/nginx.conf:/etc/nginx/conf.d/default.conf nginx:alpine
+                '''
             }
         }
         
