@@ -11,7 +11,7 @@ class BasicTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         
         # 2. Check if our specific text is on the page
-        self.assertTrue(b'DevOps Pipeline Active' in response.data)
+        self.assertTrue(b'DevOps Command Dashboard' in response.data)
 
 if __name__ == '__main__':
     unittest.main()
