@@ -3,36 +3,412 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Architecture Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>DevOps Command Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f6f7f9;
+            --panel: rgba(255, 255, 255, 0.88);
+            --text: #152238;
+            --muted: #5d6a7e;
+            --line: #d8dfeb;
+            --primary: #0f8cff;
+            --success: #00a86b;
+            --warning: #e9901a;
+            --danger: #dd3f49;
+            --shadow-lg: 0 30px 70px rgba(10, 35, 65, 0.14);
+            --shadow-md: 0 14px 28px rgba(10, 35, 65, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: "Outfit", sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 8% 15%, #d6ecff 0%, transparent 40%),
+                radial-gradient(circle at 90% 10%, #fff4d8 0%, transparent 36%),
+                radial-gradient(circle at 80% 80%, #e2ffe7 0%, transparent 30%),
+                linear-gradient(135deg, #f9fbfe, #eef2f8 55%, #f4f6fb);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+            overflow-x: hidden;
+        }
+
+        .shell {
+            width: min(1180px, 100%);
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.92);
+            background: var(--panel);
+            backdrop-filter: blur(10px);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            animation: reveal 0.75s ease;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.2rem 1.4rem;
+            border-bottom: 1px solid var(--line);
+            background: linear-gradient(to right, rgba(15, 140, 255, 0.06), rgba(0, 168, 107, 0.05));
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }
+
+        .logo {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: linear-gradient(130deg, #0f8cff, #00a86b);
+            display: grid;
+            place-items: center;
+            color: white;
+            font-weight: 800;
+            box-shadow: 0 10px 24px rgba(15, 140, 255, 0.28);
+        }
+
+        .brand h1 {
+            font-size: 1rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .brand p {
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .badge {
+            font-family: "JetBrains Mono", monospace;
+            font-size: 0.78rem;
+            border: 1px solid #b8ddff;
+            color: #0363b0;
+            background: #e9f6ff;
+            border-radius: 999px;
+            padding: 0.4rem 0.75rem;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1.45fr 1fr;
+            gap: 1.1rem;
+            padding: 1.15rem;
+        }
+
+        .hero {
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            padding: 1.4rem;
+            background: linear-gradient(140deg, #ffffff 0%, #f8fbff 52%, #f4fff8 100%);
+            box-shadow: var(--shadow-md);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            right: -40px;
+            top: -30px;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            border: 20px solid rgba(15, 140, 255, 0.06);
+            animation: pulse 4s infinite ease-in-out;
+        }
+
+        .hero h2 {
+            font-size: clamp(1.5rem, 2.2vw, 2.3rem);
+            line-height: 1.15;
+            max-width: 18ch;
+        }
+
+        .hero p {
+            margin-top: 0.7rem;
+            color: var(--muted);
+            max-width: 58ch;
+            line-height: 1.52;
+        }
+
+        .stats {
+            margin-top: 1.25rem;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.75rem;
+        }
+
+        .card {
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 0.9rem;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            transform: translateY(14px);
+            opacity: 0;
+            animation: rise 0.6s forwards ease;
+        }
+
+        .card:nth-child(2) {
+            animation-delay: 0.08s;
+        }
+
+        .card:nth-child(3) {
+            animation-delay: 0.16s;
+        }
+
+        .card span {
+            font-family: "JetBrains Mono", monospace;
+            color: var(--muted);
+            font-size: 0.76rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .card strong {
+            font-size: 1.22rem;
+            font-weight: 700;
+        }
+
+        .good { color: var(--success); }
+        .primary { color: var(--primary); }
+        .warn { color: var(--warning); }
+
+        .side {
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            padding: 1.2rem;
+            background: #fff;
+            box-shadow: var(--shadow-md);
+        }
+
+        .side h3 {
+            margin-bottom: 0.9rem;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .timeline {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+
+        .timeline li {
+            display: grid;
+            grid-template-columns: 30px 1fr;
+            gap: 0.6rem;
+            align-items: start;
+        }
+
+        .dot {
+            width: 14px;
+            height: 14px;
+            margin-top: 0.18rem;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            box-shadow: 0 0 0 2px #cfd8e7;
+        }
+
+        .dot.ok { background: var(--success); }
+        .dot.run { background: var(--primary); }
+        .dot.warn { background: var(--warning); }
+
+        .timeline h4 {
+            font-size: 0.95rem;
+            margin-bottom: 0.18rem;
+        }
+
+        .timeline p {
+            color: var(--muted);
+            font-size: 0.86rem;
+            line-height: 1.45;
+        }
+
+        .footer {
+            border-top: 1px solid var(--line);
+            padding: 0.9rem 1.4rem 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: center;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .signal {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: "JetBrains Mono", monospace;
+        }
+
+        .signal i {
+            width: 9px;
+            height: 9px;
+            background: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 0 0 rgba(0, 168, 107, 0.5);
+            animation: ping 1.7s infinite;
+        }
+
+        @keyframes rise {
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes reveal {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes ping {
+            0% { box-shadow: 0 0 0 0 rgba(0, 168, 107, 0.45); }
+            70% { box-shadow: 0 0 0 9px rgba(0, 168, 107, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 168, 107, 0); }
+        }
+
+        @media (max-width: 960px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
+            .footer {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .topbar,
+            .content,
+            .footer {
+                padding-left: 0.9rem;
+                padding-right: 0.9rem;
+            }
+
+            .badge {
+                display: none;
+            }
+
+            .hero,
+            .side {
+                border-radius: 18px;
+            }
+        }
+    </style>
 </head>
-<body class="bg-gray-900 text-white flex items-center justify-center h-screen font-sans">
-    
-    <div class="bg-gray-800 p-10 rounded-xl shadow-2xl border border-blue-500 w-full max-w-3xl text-center">
-        <h1 class="text-4xl font-extrabold text-blue-400 mb-2">DevOps Pipeline Active</h1>
-        <p class="text-gray-400 mb-8 text-lg">Continuous Integration & Deployment successfully orchestrated via Jenkins.(v2.1.0)</p>
-        
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-gray-700 p-6 rounded-lg border-t-4 border-green-500 shadow-inner">
-                <h3 class="text-sm text-gray-400 uppercase tracking-wide">System Status</h3>
-                <p class="text-2xl font-bold text-green-400 mt-2">Online</p>
+<body>
+    <main class="shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="logo">DC</div>
+                <div>
+                    <h1>DevOps Command</h1>
+                    <p>Frontend demo dashboard for project walkthroughs</p>
+                </div>
             </div>
-            
-            <div class="bg-gray-700 p-6 rounded-lg border-t-4 border-blue-500 shadow-inner">
-                <h3 class="text-sm text-gray-400 uppercase tracking-wide">Build Version</h3>
-                <p class="text-2xl font-bold text-blue-400 mt-2">v2.1.0</p>
-            </div>
-            
-            <div class="bg-gray-700 p-6 rounded-lg border-t-4 border-purple-500 shadow-inner">
-                <h3 class="text-sm text-gray-400 uppercase tracking-wide">Container Engine</h3>
-                <p class="text-2xl font-bold text-purple-400 mt-2">Docker</p>
-            </div>
-        </div>
+            <div class="badge">Release v2.1.0</div>
+        </header>
 
-        <div class="mt-10 text-sm text-gray-500">
-            <p>Engineered by Shivam Kumar</p>
-        </div>
-    </div>
+        <section class="content">
+            <article class="hero">
+                <h2>Pipeline status is healthy and shipping continuously.</h2>
+                <p>
+                    This dashboard gives a visual summary of build health, deployment flow, and runtime confidence.
+                    Use it during demos to explain CI/CD stages quickly with a cleaner, modern look.
+                </p>
 
+                <div class="stats">
+                    <div class="card">
+                        <span>System Status</span>
+                        <strong class="good">Online</strong>
+                    </div>
+                    <div class="card">
+                        <span>Container Engine</span>
+                        <strong class="primary">Docker</strong>
+                    </div>
+                    <div class="card">
+                        <span>Build Duration</span>
+                        <strong class="warn">03m 18s</strong>
+                    </div>
+                </div>
+            </article>
+
+            <aside class="side">
+                <h3>Pipeline Timeline</h3>
+                <ul class="timeline">
+                    <li>
+                        <span class="dot ok"></span>
+                        <div>
+                            <h4>Checkout + Unit Tests</h4>
+                            <p>Source fetched from main branch and tests completed with 100% pass.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="dot ok"></span>
+                        <div>
+                            <h4>Image Build</h4>
+                            <p>Multi-stage image created and scanned, then tagged for deployment.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="dot run"></span>
+                        <div>
+                            <h4>Deployment</h4>
+                            <p>Rolling update is live across containers behind Nginx reverse proxy.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="dot warn"></span>
+                        <div>
+                            <h4>Observability Alert</h4>
+                            <p>Minor warning on latency threshold, auto-scaling recommendation available.</p>
+                        </div>
+                    </li>
+                </ul>
+            </aside>
+        </section>
+
+        <footer class="footer">
+            <p>Engineered by Shivam Kumar • Jenkins orchestrated CI/CD</p>
+            <p class="signal"><i></i> Live Monitoring Active</p>
+        </footer>
+    </main>
 </body>
 </html>
