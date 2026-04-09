@@ -1,54 +1,140 @@
 pipeline {
     agent any
-    
+
+    environment {
+        APP_IMAGE   = 'devops-python-app'
+        NGINX_IMAGE = 'devops-nginx'
+        APP_VERSION = "${env.BUILD_NUMBER ?: 'latest'}"
+        NETWORK     = 'devops-net'
+    }
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+    }
+
     stages {
+
+        // ── 1. Source ────────────────────────────────────────────────
         stage('Checkout Code') {
             steps {
                 checkout scm
+                echo "Building version: ${APP_VERSION}"
             }
         }
-        
-        stage('Automated Tests') {
+
+        // ── 2. Dependencies ──────────────────────────────────────────
+        stage('Install Dependencies') {
             steps {
-                echo 'Running Python Integration Tests...'
+                echo 'Creating virtual environment and installing dependencies...'
                 sh '''
-                python3 -m venv venv
-                . venv/bin/activate
-                pip install flask psutil
-                python3 test_app.py
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install --upgrade pip
+                    pip install -r requirements.txt
                 '''
             }
         }
-        
-       stage('Build Production Images') {
+
+        // ── 3. Code Quality ─────────────────────────────────────────
+        stage('Lint & Code Quality') {
             steps {
-                echo 'Tests passed! Building the Docker images...'
-                // Build the Python App
-                sh 'docker build -t devops-python-app:latest -f Dockerfile .'
-                // Build the custom Nginx Proxy
-                sh 'docker build -t devops-nginx:latest -f Dockerfile.nginx .'
-            }
-        }
-        
-        stage('Deploy to Production') {
-            steps {
-                echo 'Deploying the multi-container architecture...'
-                
+                echo 'Running flake8 linting...'
                 sh '''
-                # 1. Create a private network for the containers
-                docker network create devops-net || true
-                
-                # 2. Delete any old containers
-                docker rm -f live-python-app || true
-                docker rm -f live-nginx || true
-                
-                # 3. Launch the Python App (Hidden on the private network)
-                docker run -d --network devops-net --name live-python-app devops-python-app:latest
-                
-                # 4. Launch Nginx (Public facing on port 80, using our new custom baked image)
-                docker run -d -p 80:80 --network devops-net --name live-nginx devops-nginx:latest
+                    . venv/bin/activate
+                    flake8 app.py test_app.py --statistics --count
                 '''
             }
+        }
+
+        // ── 4. Tests ────────────────────────────────────────────────
+        stage('Unit & Integration Tests') {
+            steps {
+                echo 'Running pytest with JUnit XML output...'
+                sh '''
+                    . venv/bin/activate
+                    pytest test_app.py -v --tb=short --junitxml=reports/test-results.xml
+                '''
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'reports/test-results.xml'
+                }
+            }
+        }
+
+        // ── 5. Build ───────────────────────────────────────────────
+        stage('Build Production Images') {
+            steps {
+                echo 'Building Docker images...'
+                sh """
+                    docker build -t ${APP_IMAGE}:${APP_VERSION} -t ${APP_IMAGE}:latest -f Dockerfile .
+                    docker build -t ${NGINX_IMAGE}:${APP_VERSION} -t ${NGINX_IMAGE}:latest -f Dockerfile.nginx .
+                """
+            }
+        }
+
+        // ── 6. Security Scan ────────────────────────────────────────
+        stage('Security Scan') {
+            steps {
+                echo 'Scanning images for vulnerabilities with Trivy...'
+                sh """
+                    trivy image --severity HIGH,CRITICAL --exit-code 0 --no-progress ${APP_IMAGE}:${APP_VERSION}
+                    trivy image --severity HIGH,CRITICAL --exit-code 0 --no-progress ${NGINX_IMAGE}:${APP_VERSION}
+                """
+            }
+        }
+
+        // ── 7. Deploy ──────────────────────────────────────────────
+        stage('Deploy with Compose') {
+            steps {
+                echo 'Deploying multi-container stack via Docker Compose...'
+                sh '''
+                    docker compose down --remove-orphans || true
+                    docker compose up -d --build
+                '''
+            }
+        }
+
+        // ── 8. Verify ──────────────────────────────────────────────
+        stage('Post-Deploy Health Check') {
+            steps {
+                echo 'Waiting for services to stabilise...'
+                sh 'sleep 10'
+                echo 'Running deployment health check...'
+                sh '''
+                    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/health)
+                    if [ "$STATUS" != "200" ]; then
+                        echo "Health check FAILED (HTTP $STATUS)"
+                        exit 1
+                    fi
+                    echo "Health check PASSED (HTTP 200)"
+                    curl -s http://localhost/health | python3 -m json.tool
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo """
+            ╔══════════════════════════════════════════════╗
+            ║   ✅  DEPLOYMENT SUCCESSFUL — v${APP_VERSION}        ║
+            ║   Dashboard: http://localhost                ║
+            ╚══════════════════════════════════════════════╝
+            """
+        }
+        failure {
+            echo """
+            ╔══════════════════════════════════════════════╗
+            ║   ❌  PIPELINE FAILED — check logs above     ║
+            ╚══════════════════════════════════════════════╝
+            """
+        }
+        always {
+            echo 'Cleaning up dangling Docker images...'
+            sh 'docker image prune -f || true'
         }
     }
 }

@@ -1,0 +1,62 @@
+version: "3.9"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DevOps Pipeline — Multi-Container Production Stack
+# ═══════════════════════════════════════════════════════════════════════════
+# Usage:
+#   docker compose up -d --build
+#   docker compose down
+#   docker compose logs -f
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+  # ── Flask Application ─────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: live-python-app
+    restart: unless-stopped
+    networks:
+      - devops-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 64M
+    environment:
+      - FLASK_ENV=production
+
+  # ── Nginx Reverse Proxy ──────────────────────────────────────────────
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: live-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    networks:
+      - devops-net
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  devops-net:
+    driver: bridge
+    name: devops-net

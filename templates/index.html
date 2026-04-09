@@ -3,62 +3,630 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Production Telemetry</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Live Production Telemetry — DevOps Dashboard</title>
+    <meta name="description" content="Real-time Docker container telemetry dashboard with CPU, RAM, disk and network metrics.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ── Reset & Tokens ─────────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:        #0a0e1a;
+            --surface:   rgba(255,255,255,0.04);
+            --glass:     rgba(255,255,255,0.06);
+            --border:    rgba(255,255,255,0.08);
+            --text:      #e2e8f0;
+            --text-dim:  #64748b;
+            --purple:    #a78bfa;
+            --blue:      #60a5fa;
+            --cyan:      #22d3ee;
+            --green:     #4ade80;
+            --amber:     #fbbf24;
+            --red:       #f87171;
+            --pink:      #f472b6;
+            --radius:    16px;
+            --font:      'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── Particle Canvas (background) ──────────────────────────── */
+        #particles {
+            position: fixed; inset: 0;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* ── Layout ────────────────────────────────────────────────── */
+        .app {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 4rem;
+        }
+
+        /* ── Header ────────────────────────────────────────────────── */
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+        header h1 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--purple), var(--cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
+        }
+        header p {
+            color: var(--text-dim);
+            font-size: .85rem;
+            margin-top: .5rem;
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: .75rem;
+            padding: 4px 14px;
+            border-radius: 999px;
+            font-size: .75rem;
+            font-weight: 600;
+            background: rgba(74,222,128,0.1);
+            color: var(--green);
+            border: 1px solid rgba(74,222,128,0.2);
+        }
+        .status-dot {
+            width: 7px; height: 7px;
+            background: var(--green);
+            border-radius: 50%;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74,222,128,0.5); }
+            50%       { opacity: .6; box-shadow: 0 0 0 6px rgba(74,222,128,0); }
+        }
+
+        /* ── Gauge Grid ────────────────────────────────────────────── */
+        .gauge-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            transition: transform .25s ease, box-shadow .25s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: var(--card-accent, var(--purple));
+            opacity: .7;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+        }
+
+        .card-label {
+            font-size: .7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--text-dim);
+            margin-bottom: 1rem;
+        }
+
+        /* ── SVG Gauge ─────────────────────────────────────────────── */
+        .gauge-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            width: 130px;
+            height: 130px;
+            margin: 0 auto;
+        }
+        .gauge-svg {
+            transform: rotate(-90deg);
+            width: 130px;
+            height: 130px;
+        }
+        .gauge-bg {
+            fill: none;
+            stroke: rgba(255,255,255,0.06);
+            stroke-width: 10;
+        }
+        .gauge-fill {
+            fill: none;
+            stroke-width: 10;
+            stroke-linecap: round;
+            transition: stroke-dashoffset .6s cubic-bezier(.4,0,.2,1), stroke .3s ease;
+        }
+        .gauge-value {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.65rem;
+            font-weight: 700;
+        }
+
+        /* ── Sparkline Canvas ──────────────────────────────────────── */
+        .sparkline-container {
+            margin-top: 1rem;
+        }
+        .sparkline-canvas {
+            width: 100%;
+            height: 40px;
+            display: block;
+            border-radius: 6px;
+        }
+
+        /* ── Info Grid (bottom stats) ──────────────────────────────── */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .info-card {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.25rem 1.5rem;
+            backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: transform .25s ease, box-shadow .25s ease;
+        }
+        .info-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .info-icon {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            flex-shrink: 0;
+        }
+        .info-label {
+            font-size: .7rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        .info-value {
+            font-size: 1.35rem;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        /* ── Network Bar ───────────────────────────────────────────── */
+        .net-bar {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.25rem 1.5rem;
+            backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .net-stat {
+            text-align: center;
+        }
+        .net-stat .info-label { margin-bottom: 4px; }
+        .net-stat .info-value { font-size: 1.1rem; }
+
+        /* ── Footer ────────────────────────────────────────────────── */
+        footer {
+            text-align: center;
+            margin-top: 2rem;
+            color: var(--text-dim);
+            font-size: .75rem;
+        }
+        footer a {
+            color: var(--purple);
+            text-decoration: none;
+        }
+
+        /* ── Utility ───────────────────────────────────────────────── */
+        .fade-in {
+            animation: fadeIn .6s ease both;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+    </style>
 </head>
-<body class="bg-gray-900 text-white flex items-center justify-center h-screen font-sans">
-    
-    <div class="bg-gray-800 p-10 rounded-xl shadow-2xl border border-blue-500 w-full max-w-3xl text-center">
-        <h1 class="text-4xl font-extrabold text-blue-400 mb-2">Live Production Telemetry</h1>
-        <p class="text-gray-400 mb-8 text-sm">Real-time Docker container metrics • Routed via Nginx</p>
-        
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div class="bg-gray-700 p-6 rounded-lg border-t-4 border-purple-500 shadow-inner">
-                <h3 class="text-sm text-gray-400 uppercase tracking-wide">CPU Load</h3>
-                <p id="cpu-text" class="text-4xl font-bold text-purple-400 mt-2">0%</p>
-                <div class="w-full bg-gray-600 rounded-full h-2.5 mt-4">
-                    <div id="cpu-bar" class="bg-purple-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
-                </div>
-            </div>
-            
-            <div class="bg-gray-700 p-6 rounded-lg border-t-4 border-blue-500 shadow-inner">
-                <h3 class="text-sm text-gray-400 uppercase tracking-wide">Memory (RAM)</h3>
-                <p id="ram-text" class="text-4xl font-bold text-blue-400 mt-2">0%</p>
-                <div class="w-full bg-gray-600 rounded-full h-2.5 mt-4">
-                    <div id="ram-bar" class="bg-blue-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
-                </div>
-            </div>
+<body>
 
-            <div class="bg-gray-700 p-6 rounded-lg border-t-4 border-green-500 shadow-inner">
-                <h3 class="text-sm text-gray-400 uppercase tracking-wide">Active Threads</h3>
-                <p id="threads-text" class="text-4xl font-bold text-green-400 mt-2">0</p>
-                <p class="text-xs text-gray-500 mt-4">Flask Worker Processes</p>
+<canvas id="particles"></canvas>
+
+<div class="app">
+    <!-- ── Header ──────────────────────────────────────────────── -->
+    <header class="fade-in" style="animation-delay:.1s">
+        <h1>Live Production Telemetry</h1>
+        <p>Real-time Docker container metrics &bull; Reverse-proxied via Nginx &bull; CI/CD by Jenkins</p>
+        <div class="status-pill" id="status-pill">
+            <span class="status-dot"></span>
+            <span id="status-text">Connecting…</span>
+        </div>
+    </header>
+
+    <!-- ── Gauge Cards ─────────────────────────────────────────── -->
+    <section class="gauge-grid">
+        <!-- CPU -->
+        <div class="card fade-in" style="--card-accent:var(--purple); animation-delay:.2s" id="card-cpu">
+            <div class="card-label">CPU Load</div>
+            <div class="gauge-wrap">
+                <svg class="gauge-svg" viewBox="0 0 130 130">
+                    <circle class="gauge-bg" cx="65" cy="65" r="52"/>
+                    <circle class="gauge-fill" id="gauge-cpu" cx="65" cy="65" r="52"
+                            stroke="var(--purple)"
+                            stroke-dasharray="326.73"
+                            stroke-dashoffset="326.73"/>
+                </svg>
+                <span class="gauge-value" id="val-cpu" style="color:var(--purple)">0%</span>
+            </div>
+            <div class="sparkline-container">
+                <canvas class="sparkline-canvas" id="spark-cpu"></canvas>
             </div>
         </div>
-        
-        <div class="text-sm text-gray-500 animate-pulse">
-            <span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span> Connection Active
-        </div>
-    </div>
 
-    <script>
-        // Ping the server every 1 second (1000ms) to get live metrics
-        setInterval(async () => {
-            try {
-                const response = await fetch('/metrics');
-                const data = await response.json();
-                
-                document.getElementById('cpu-text').innerText = data.cpu + '%';
-                document.getElementById('cpu-bar').style.width = data.cpu + '%';
-                
-                document.getElementById('ram-text').innerText = data.ram + '%';
-                document.getElementById('ram-bar').style.width = data.ram + '%';
-                
-                document.getElementById('threads-text').innerText = data.threads;
-            } catch (err) {
-                console.error("Failed to fetch metrics", err);
+        <!-- RAM -->
+        <div class="card fade-in" style="--card-accent:var(--blue); animation-delay:.3s" id="card-ram">
+            <div class="card-label">Memory (RAM)</div>
+            <div class="gauge-wrap">
+                <svg class="gauge-svg" viewBox="0 0 130 130">
+                    <circle class="gauge-bg" cx="65" cy="65" r="52"/>
+                    <circle class="gauge-fill" id="gauge-ram" cx="65" cy="65" r="52"
+                            stroke="var(--blue)"
+                            stroke-dasharray="326.73"
+                            stroke-dashoffset="326.73"/>
+                </svg>
+                <span class="gauge-value" id="val-ram" style="color:var(--blue)">0%</span>
+            </div>
+            <div class="sparkline-container">
+                <canvas class="sparkline-canvas" id="spark-ram"></canvas>
+            </div>
+        </div>
+
+        <!-- Disk -->
+        <div class="card fade-in" style="--card-accent:var(--cyan); animation-delay:.4s" id="card-disk">
+            <div class="card-label">Disk Usage</div>
+            <div class="gauge-wrap">
+                <svg class="gauge-svg" viewBox="0 0 130 130">
+                    <circle class="gauge-bg" cx="65" cy="65" r="52"/>
+                    <circle class="gauge-fill" id="gauge-disk" cx="65" cy="65" r="52"
+                            stroke="var(--cyan)"
+                            stroke-dasharray="326.73"
+                            stroke-dashoffset="326.73"/>
+                </svg>
+                <span class="gauge-value" id="val-disk" style="color:var(--cyan)">0%</span>
+            </div>
+            <div class="sparkline-container">
+                <canvas class="sparkline-canvas" id="spark-disk"></canvas>
+            </div>
+        </div>
+
+        <!-- Threads -->
+        <div class="card fade-in" style="--card-accent:var(--green); animation-delay:.5s" id="card-threads">
+            <div class="card-label">Active Threads</div>
+            <div class="gauge-wrap">
+                <svg class="gauge-svg" viewBox="0 0 130 130">
+                    <circle class="gauge-bg" cx="65" cy="65" r="52"/>
+                    <circle class="gauge-fill" id="gauge-threads" cx="65" cy="65" r="52"
+                            stroke="var(--green)"
+                            stroke-dasharray="326.73"
+                            stroke-dashoffset="326.73"/>
+                </svg>
+                <span class="gauge-value" id="val-threads" style="color:var(--green)">0</span>
+            </div>
+            <div class="sparkline-container">
+                <canvas class="sparkline-canvas" id="spark-threads"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── Info Cards ──────────────────────────────────────────── -->
+    <section class="info-grid fade-in" style="animation-delay:.6s">
+        <div class="info-card">
+            <div class="info-icon" style="background:rgba(167,139,250,0.12);color:var(--purple)">⏱</div>
+            <div>
+                <div class="info-label">Uptime</div>
+                <div class="info-value" id="val-uptime">0s</div>
+            </div>
+        </div>
+        <div class="info-card">
+            <div class="info-icon" style="background:rgba(96,165,250,0.12);color:var(--blue)">📨</div>
+            <div>
+                <div class="info-label">Requests Served</div>
+                <div class="info-value" id="val-requests">0</div>
+            </div>
+        </div>
+        <div class="info-card">
+            <div class="info-icon" style="background:rgba(34,211,238,0.12);color:var(--cyan)">⚡</div>
+            <div>
+                <div class="info-label">API Latency</div>
+                <div class="info-value" id="val-latency">—</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── Network Bar ─────────────────────────────────────────── -->
+    <section class="net-bar fade-in" style="animation-delay:.7s">
+        <div class="net-stat">
+            <div class="info-label">Network Sent</div>
+            <div class="info-value" id="val-net-sent" style="color:var(--pink)">0 B</div>
+        </div>
+        <div class="net-stat">
+            <div class="info-label">Network Received</div>
+            <div class="info-value" id="val-net-recv" style="color:var(--amber)">0 B</div>
+        </div>
+        <div class="net-stat">
+            <div class="info-label">Polling Interval</div>
+            <div class="info-value" style="color:var(--green)">1 s</div>
+        </div>
+    </section>
+
+    <footer class="fade-in" style="animation-delay:.8s">
+        DevOps CI/CD Pipeline &bull; Jenkins &rarr; Docker &rarr; Nginx &rarr; Flask &bull; v2.0
+    </footer>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// Particle Background
+// ═══════════════════════════════════════════════════════════════════════════
+(function initParticles() {
+    const canvas = document.getElementById('particles');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+    const particles = [];
+    const COUNT = 60;
+
+    function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    for (let i = 0; i < COUNT; i++) {
+        particles.push({
+            x: Math.random() * W,
+            y: Math.random() * H,
+            r: Math.random() * 1.5 + 0.5,
+            dx: (Math.random() - 0.5) * 0.3,
+            dy: (Math.random() - 0.5) * 0.3,
+            o: Math.random() * 0.3 + 0.1,
+        });
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, W, H);
+        particles.forEach(p => {
+            p.x += p.dx; p.y += p.dy;
+            if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+            if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(167,139,250,${p.o})`;
+            ctx.fill();
+        });
+        // lines between nearby particles
+        for (let i = 0; i < particles.length; i++) {
+            for (let j = i + 1; j < particles.length; j++) {
+                const dx = particles[i].x - particles[j].x;
+                const dy = particles[i].y - particles[j].y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 140) {
+                    ctx.beginPath();
+                    ctx.moveTo(particles[i].x, particles[i].y);
+                    ctx.lineTo(particles[j].x, particles[j].y);
+                    ctx.strokeStyle = `rgba(96,165,250,${0.07 * (1 - dist/140)})`;
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+                }
             }
-        }, 1000);
-    </script>
+        }
+        requestAnimationFrame(draw);
+    }
+    draw();
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════════
+const CIRC = 2 * Math.PI * 52; // 326.73
+const history = { cpu: [], ram: [], disk: [], threads: [] };
+const HIST_LEN = 60;
+
+function setGauge(id, pct) {
+    const el = document.getElementById(id);
+    el.setAttribute('stroke-dashoffset', CIRC - (CIRC * pct / 100));
+}
+
+function healthColor(pct) {
+    if (pct < 60) return null;       // keep accent
+    if (pct < 85) return 'var(--amber)';
+    return 'var(--red)';
+}
+
+function applyHealthColor(gaugeId, valId, pct) {
+    const c = healthColor(pct);
+    if (c) {
+        document.getElementById(gaugeId).setAttribute('stroke', c);
+        document.getElementById(valId).style.color = c;
+    }
+}
+
+function formatBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+    if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
+    return (b / 1073741824).toFixed(2) + ' GB';
+}
+
+function formatUptime(s) {
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (d > 0) return `${d}d ${h}h ${m}m`;
+    if (h > 0) return `${h}h ${m}m ${sec}s`;
+    if (m > 0) return `${m}m ${sec}s`;
+    return `${sec}s`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Sparkline Renderer
+// ═══════════════════════════════════════════════════════════════════════════
+function drawSparkline(canvasId, data, color) {
+    const canvas = document.getElementById(canvasId);
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    if (data.length < 2) return;
+
+    const max = Math.max(...data, 1);
+    const step = rect.width / (HIST_LEN - 1);
+
+    // Gradient fill
+    const grad = ctx.createLinearGradient(0, 0, 0, rect.height);
+    grad.addColorStop(0, color.replace(')', ',0.25)').replace('rgb', 'rgba'));
+    grad.addColorStop(1, 'transparent');
+
+    ctx.beginPath();
+    ctx.moveTo(0, rect.height);
+    data.forEach((v, i) => {
+        const x = i * step;
+        const y = rect.height - (v / max) * (rect.height - 4);
+        if (i === 0) ctx.lineTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.lineTo((data.length - 1) * step, rect.height);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    data.forEach((v, i) => {
+        const x = i * step;
+        const y = rect.height - (v / max) * (rect.height - 4);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Polling Loop
+// ═══════════════════════════════════════════════════════════════════════════
+let connected = false;
+
+async function poll() {
+    const t0 = performance.now();
+    try {
+        const resp = await fetch('/metrics');
+        const data = await resp.json();
+        const latency = Math.round(performance.now() - t0);
+
+        // Update gauges
+        setGauge('gauge-cpu',  data.cpu);
+        setGauge('gauge-ram',  data.ram);
+        setGauge('gauge-disk', data.disk);
+        // Threads: show as % of 50 (arbitrary ceiling)
+        setGauge('gauge-threads', Math.min(data.threads / 50 * 100, 100));
+
+        // Update values
+        document.getElementById('val-cpu').textContent     = data.cpu.toFixed(1) + '%';
+        document.getElementById('val-ram').textContent     = data.ram.toFixed(1) + '%';
+        document.getElementById('val-disk').textContent    = data.disk.toFixed(1) + '%';
+        document.getElementById('val-threads').textContent = data.threads;
+
+        // Health colors
+        applyHealthColor('gauge-cpu',  'val-cpu',  data.cpu);
+        applyHealthColor('gauge-ram',  'val-ram',  data.ram);
+        applyHealthColor('gauge-disk', 'val-disk', data.disk);
+
+        // Info cards
+        document.getElementById('val-uptime').textContent   = formatUptime(data.uptime);
+        document.getElementById('val-requests').textContent = data.requests.toLocaleString();
+        document.getElementById('val-latency').textContent  = latency + ' ms';
+        document.getElementById('val-net-sent').textContent = formatBytes(data.net_sent);
+        document.getElementById('val-net-recv').textContent = formatBytes(data.net_recv);
+
+        // History for sparklines
+        history.cpu.push(data.cpu);
+        history.ram.push(data.ram);
+        history.disk.push(data.disk);
+        history.threads.push(data.threads);
+        if (history.cpu.length > HIST_LEN) { history.cpu.shift(); history.ram.shift(); history.disk.shift(); history.threads.shift(); }
+
+        drawSparkline('spark-cpu',     history.cpu,     'rgb(167,139,250)');
+        drawSparkline('spark-ram',     history.ram,     'rgb(96,165,250)');
+        drawSparkline('spark-disk',    history.disk,    'rgb(34,211,238)');
+        drawSparkline('spark-threads', history.threads, 'rgb(74,222,128)');
+
+        // Connection status
+        if (!connected) {
+            connected = true;
+            document.getElementById('status-text').textContent = 'System Online';
+        }
+    } catch (e) {
+        connected = false;
+        document.getElementById('status-text').textContent = 'Connection Lost';
+        document.getElementById('status-pill').style.background = 'rgba(248,113,113,0.1)';
+        document.getElementById('status-pill').style.borderColor = 'rgba(248,113,113,0.2)';
+        document.getElementById('status-pill').style.color = 'var(--red)';
+        document.querySelector('.status-dot').style.background = 'var(--red)';
+    }
+}
+
+setInterval(poll, 1000);
+poll();
+</script>
 </body>
 </html>
