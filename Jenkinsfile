@@ -89,13 +89,38 @@ pipeline {
         }
 
         // ── 7. Deploy ──────────────────────────────────────────────
-        stage('Deploy with Compose') {
+        stage('Deploy Containers') {
             steps {
-                echo 'Deploying multi-container stack via Docker Compose...'
-                sh '''
-                    docker compose down --remove-orphans || true
-                    docker compose up -d --build
-                '''
+                echo 'Deploying multi-container stack...'
+                sh """
+                    # Create network if it doesn't exist
+                    docker network create devops-net || true
+
+                    # Stop and remove old containers
+                    docker rm -f live-python-app live-nginx || true
+
+                    # Run Flask app container
+                    docker run -d \
+                        --name live-python-app \
+                        --network devops-net \
+                        --restart unless-stopped \
+                        --memory 256m \
+                        --cpus 1.0 \
+                        -e FLASK_ENV=production \
+                        ${APP_IMAGE}:${APP_VERSION}
+
+                    # Wait for app to be healthy
+                    echo 'Waiting for Flask app to start...'
+                    sleep 5
+
+                    # Run Nginx container
+                    docker run -d \
+                        --name live-nginx \
+                        --network devops-net \
+                        --restart unless-stopped \
+                        -p 80:80 \
+                        ${NGINX_IMAGE}:${APP_VERSION}
+                """
             }
         }
 

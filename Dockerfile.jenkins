@@ -2,7 +2,7 @@ FROM jenkins/jenkins:lts
 
 USER root
 
-# Install Python, pip, venv, Docker CLI, Docker Compose plugin, and Trivy
+# 1. Install Python, Docker CLI, and base tools
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
@@ -10,8 +10,15 @@ RUN apt-get update && apt-get install -y \
     docker.io \
     curl \
     wget \
-    && curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# 2. Install Trivy Security Scanner
+RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+# 3. Install Docker Compose Plugin (This is the missing piece!)
+RUN mkdir -p /usr/libexec/docker/cli-plugins/ \
+    && curl -SL https://github.com/docker/compose/releases/download/v2.26.1/docker-compose-linux-x86_64 -o /usr/libexec/docker/cli-plugins/docker-compose \
+    && chmod +x /usr/libexec/docker/cli-plugins/docker-compose
 
 USER jenkins
