@@ -3,65 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ML-Ops Sentiment Engine</title>
+    <title>Production Telemetry</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-900 text-white flex items-center justify-center h-screen font-sans">
     
-    <div class="bg-gray-800 p-10 rounded-xl shadow-2xl border border-blue-500 w-full max-w-2xl text-center">
-        <h1 class="text-4xl font-extrabold text-blue-400 mb-2">ML-Ops Sentiment Engine</h1>
-        <p class="text-gray-400 mb-8 text-sm">Deployed via Jenkins CI/CD • Running on Docker & Nginx</p>
+    <div class="bg-gray-800 p-10 rounded-xl shadow-2xl border border-blue-500 w-full max-w-3xl text-center">
+        <h1 class="text-4xl font-extrabold text-blue-400 mb-2">Live Production Telemetry</h1>
+        <p class="text-gray-400 mb-8 text-sm">Real-time Docker container metrics • Routed via Nginx</p>
         
-        <textarea id="textInput" rows="3" class="w-full p-4 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500 focus:outline-none mb-4" placeholder="Enter text to analyze... (e.g., 'This pipeline is amazing!')"></textarea>
-        
-        <button onclick="analyzeText()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg w-full transition duration-200">
-            Run Inference
-        </button>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-gray-700 p-6 rounded-lg border-t-4 border-purple-500 shadow-inner">
+                <h3 class="text-sm text-gray-400 uppercase tracking-wide">CPU Load</h3>
+                <p id="cpu-text" class="text-4xl font-bold text-purple-400 mt-2">0%</p>
+                <div class="w-full bg-gray-600 rounded-full h-2.5 mt-4">
+                    <div id="cpu-bar" class="bg-purple-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div class="bg-gray-700 p-6 rounded-lg border-t-4 border-blue-500 shadow-inner">
+                <h3 class="text-sm text-gray-400 uppercase tracking-wide">Memory (RAM)</h3>
+                <p id="ram-text" class="text-4xl font-bold text-blue-400 mt-2">0%</p>
+                <div class="w-full bg-gray-600 rounded-full h-2.5 mt-4">
+                    <div id="ram-bar" class="bg-blue-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
 
-        <div id="resultBox" class="hidden mt-8 p-6 rounded-lg border-t-4 bg-gray-700 shadow-inner">
-            <h3 class="text-sm text-gray-400 uppercase tracking-wide">Inference Result</h3>
-            <p id="sentimentOutput" class="text-3xl font-bold mt-2">-</p>
-            <p id="polarityOutput" class="text-sm text-gray-400 mt-2">Confidence Score: -</p>
+            <div class="bg-gray-700 p-6 rounded-lg border-t-4 border-green-500 shadow-inner">
+                <h3 class="text-sm text-gray-400 uppercase tracking-wide">Active Threads</h3>
+                <p id="threads-text" class="text-4xl font-bold text-green-400 mt-2">0</p>
+                <p class="text-xs text-gray-500 mt-4">Flask Worker Processes</p>
+            </div>
+        </div>
+        
+        <div class="text-sm text-gray-500 animate-pulse">
+            <span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span> Connection Active
         </div>
     </div>
 
     <script>
-        async function analyzeText() {
-            const text = document.getElementById('textInput').value;
-            if (!text) return;
-
-            // Send data to the Flask /analyze endpoint
-            const response = await fetch('/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: text })
-            });
-
-            const result = await response.json();
-            
-            // Show the result box
-            const resultBox = document.getElementById('resultBox');
-            const sentimentOutput = document.getElementById('sentimentOutput');
-            const polarityOutput = document.getElementById('polarityOutput');
-            
-            resultBox.classList.remove('hidden');
-            polarityOutput.innerText = `Polarity Score: ${result.polarity}`;
-            
-            // Change colors based on sentiment
-            if (result.sentiment === "Positive") {
-                sentimentOutput.innerText = "✅ Positive";
-                sentimentOutput.className = "text-3xl font-bold mt-2 text-green-400";
-                resultBox.className = "mt-8 p-6 rounded-lg border-t-4 border-green-500 bg-gray-700 shadow-inner";
-            } else if (result.sentiment === "Negative") {
-                sentimentOutput.innerText = "❌ Negative";
-                sentimentOutput.className = "text-3xl font-bold mt-2 text-red-400";
-                resultBox.className = "mt-8 p-6 rounded-lg border-t-4 border-red-500 bg-gray-700 shadow-inner";
-            } else {
-                sentimentOutput.innerText = "➖ Neutral";
-                sentimentOutput.className = "text-3xl font-bold mt-2 text-gray-300";
-                resultBox.className = "mt-8 p-6 rounded-lg border-t-4 border-gray-400 bg-gray-700 shadow-inner";
+        // Ping the server every 1 second (1000ms) to get live metrics
+        setInterval(async () => {
+            try {
+                const response = await fetch('/metrics');
+                const data = await response.json();
+                
+                document.getElementById('cpu-text').innerText = data.cpu + '%';
+                document.getElementById('cpu-bar').style.width = data.cpu + '%';
+                
+                document.getElementById('ram-text').innerText = data.ram + '%';
+                document.getElementById('ram-bar').style.width = data.ram + '%';
+                
+                document.getElementById('threads-text').innerText = data.threads;
+            } catch (err) {
+                console.error("Failed to fetch metrics", err);
             }
-        }
+        }, 1000);
     </script>
 </body>
 </html>
