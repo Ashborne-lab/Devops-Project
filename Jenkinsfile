@@ -125,22 +125,22 @@ pipeline {
         }
 
         // ── 8. Verify ──────────────────────────────────────────────
-       stage('Post-Deploy Health Check') {
+        stage('Post-Deploy Health Check') {
             steps {
                 echo 'Waiting for services to stabilise...'
                 sh 'sleep 10'
                 
-                echo 'Running deployment health check...'
+                echo 'Running Inside-Out deployment health check...'
                 sh '''
-                # 1. Use host.docker.internal to escape the Jenkins container
-                # 2. Check the /metrics endpoint which actually exists in our app
-                STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://host.docker.internal/metrics)
+                # By executing wget INSIDE the live-nginx container, 
+                # we completely bypass the Windows/Jenkins DNS routing issues!
                 
-                if [ "$STATUS" != "200" ]; then
-                    echo "Health check failed! Nginx returned status: $STATUS"
+                if docker exec live-nginx wget -q -O /dev/null http://localhost/metrics; then
+                    echo "✅ Health check passed! Nginx and Python are communicating perfectly."
+                else
+                    echo "❌ Health check failed! The endpoint is unresponsive."
                     exit 1
                 fi
-                echo "Health check passed! Telemetry API is live."
                 '''
             }
         }
