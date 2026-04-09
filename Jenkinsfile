@@ -125,19 +125,22 @@ pipeline {
         }
 
         // ── 8. Verify ──────────────────────────────────────────────
-        stage('Post-Deploy Health Check') {
+       stage('Post-Deploy Health Check') {
             steps {
                 echo 'Waiting for services to stabilise...'
                 sh 'sleep 10'
+                
                 echo 'Running deployment health check...'
                 sh '''
-                    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/health)
-                    if [ "$STATUS" != "200" ]; then
-                        echo "Health check FAILED (HTTP $STATUS)"
-                        exit 1
-                    fi
-                    echo "Health check PASSED (HTTP 200)"
-                    curl -s http://localhost/health | python3 -m json.tool
+                # 1. Use host.docker.internal to escape the Jenkins container
+                # 2. Check the /metrics endpoint which actually exists in our app
+                STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://host.docker.internal/metrics)
+                
+                if [ "$STATUS" != "200" ]; then
+                    echo "Health check failed! Nginx returned status: $STATUS"
+                    exit 1
+                fi
+                echo "Health check passed! Telemetry API is live."
                 '''
             }
         }
