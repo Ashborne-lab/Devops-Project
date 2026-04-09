@@ -144,7 +144,7 @@ pipeline {
                 RETRY_INTERVAL=5
                 for i in $(seq 1 $MAX_RETRIES); do
                     echo "Attempt $i / $MAX_RETRIES ..."
-                    if docker exec live-nginx wget -q -O /dev/null --timeout=5 http://localhost/health; then
+                    if docker exec live-nginx wget -q -O /dev/null --timeout=5 http://127.0.0.1/health; then
                         echo "✅ Health check passed on attempt $i! Nginx ↔ Flask communicating perfectly."
                         exit 0
                     fi
