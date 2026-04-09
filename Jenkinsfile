@@ -129,18 +129,35 @@ pipeline {
             steps {
                 echo 'Waiting for services to stabilise...'
                 sh 'sleep 10'
-                
-                echo 'Running Inside-Out deployment health check...'
+
+                echo 'Running Inside-Out deployment health check with retries...'
                 sh '''
-                # By executing wget INSIDE the live-nginx container, 
-                # we completely bypass the Windows/Jenkins DNS routing issues!
-                
-                if docker exec live-nginx wget -q -O /dev/null http://localhost/metrics; then
-                    echo "✅ Health check passed! Nginx and Python are communicating perfectly."
-                else
-                    echo "❌ Health check failed! The endpoint is unresponsive."
-                    exit 1
-                fi
+                # Diagnostics — are the containers actually running?
+                echo "=== Container status ==="
+                docker ps --filter name=live-python-app --filter name=live-nginx --format "{{.Names}}: {{.Status}}"
+
+                echo "=== Nginx config test ==="
+                docker exec live-nginx nginx -t 2>&1 || true
+
+                echo "=== Attempting health check ==="
+                MAX_RETRIES=6
+                RETRY_INTERVAL=5
+                for i in $(seq 1 $MAX_RETRIES); do
+                    echo "Attempt $i / $MAX_RETRIES ..."
+                    if docker exec live-nginx wget -q -O /dev/null --timeout=5 http://localhost/health; then
+                        echo "✅ Health check passed on attempt $i! Nginx ↔ Flask communicating perfectly."
+                        exit 0
+                    fi
+                    echo "   ↳ Not ready yet — retrying in ${RETRY_INTERVAL}s ..."
+                    sleep $RETRY_INTERVAL
+                done
+
+                echo "❌ Health check failed after $MAX_RETRIES attempts!"
+                echo "=== Nginx error log (last 20 lines) ==="
+                docker logs live-nginx --tail 20 2>&1 || true
+                echo "=== Flask app log (last 20 lines) ==="
+                docker logs live-python-app --tail 20 2>&1 || true
+                exit 1
                 '''
             }
         }
