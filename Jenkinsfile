@@ -14,7 +14,7 @@ pipeline {
                 sh '''
                 python3 -m venv venv
                 . venv/bin/activate
-                pip install flask textblob
+                pip install flask psutil
                 python3 test_app.py
                 '''
             }
