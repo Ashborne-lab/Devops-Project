@@ -72,7 +72,13 @@ pipeline {
         // ── 6. Security Scan ────────────────────────────────────────
         stage('Security Scan') {
             steps {
-                echo 'Scanning images for vulnerabilities with Trivy...'
+                echo 'Installing Trivy (if not present) and scanning images...'
+                sh '''
+                    if ! command -v trivy &> /dev/null; then
+                        echo "Trivy not found — installing..."
+                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+                    fi
+                '''
                 sh """
                     trivy image --severity HIGH,CRITICAL --exit-code 0 --no-progress ${APP_IMAGE}:${APP_VERSION}
                     trivy image --severity HIGH,CRITICAL --exit-code 0 --no-progress ${NGINX_IMAGE}:${APP_VERSION}
