@@ -56,11 +56,6 @@ pipeline {
                     pytest test_app.py -v --tb=short --junitxml=reports/test-results.xml
                 '''
             }
-            post {
-                always {
-                    junit allowEmptyResults: true, testResults: 'reports/test-results.xml'
-                }
-            }
         }
 
         // ── 5. Build ───────────────────────────────────────────────
